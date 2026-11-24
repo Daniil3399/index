@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Доставка дроном</title>
+
+<script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_API_КЛЮЧ&suggest_apikey=ВАШ_API_КЛЮЧ" type="text/javascript"></script>
+
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --pickup: #10b981;
+    --delivery: #ef4444;
+    --shadow: 0 1px 3px rgba(15,23,42,.08), 0 8px 24px rgba(15,23,42,.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+  }
+
+  .badge {
+    background: #ecfdf5;
+    color: #047857;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .hero {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .hero h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    font-weight: 800;
+    letter-spacing: -.03em;
+    margin-bottom: 8px;
+  }
+  .hero p {
+    color: var(--muted);
+    font-size: 17px;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .map-wrap {
+    position: relative;
+    height: 480px;
+    background: #e2e8f0;
+  }
+  #map, #trackingMap { width: 100%; height: 100%; }
+
+  .map-hint {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    background: rgba(255,255,255,.95);
+    backdrop-filter: blur(8px);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    box-shadow: 0 4px 12px rgba(15,23,42,.1);
+    z-index: 500;
+    text-align: center;
+  }
+
+  .form-section {
+    padding: 24px;
+  }
+
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .point-input {
+    position: relative;
+    margin-bottom: 14px;
+  }
+  .point-input label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot.pickup { background: var(--pickup); }
+  .dot.delivery { background: var(--delivery); }
+
+  .input-row {
+    position: relative;
+    display: flex;
+    gap: 8px;
+  }
+
+  .point-input input,
+  .weight-input input {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    background: #fff;
+    color: var(--text);
+    font-family: inherit;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .point-input input:focus,
+  .weight-input input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(37,99,235,.12);
+  }
+
+  .map-pick-btn {
+    flex-shrink: 0;
+    padding: 0 14px;
+    border: 1.5px solid var(--border);
+    background: #fff;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .map-pick-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .map-pick-btn.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .map-pick-btn svg { flex-shrink: 0; }
+
+  .weight-input {
+    margin-bottom: 20px;
+  }
+  .weight-input label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 9000;
+    box-shadow: 0 8px 24px rgba(15,23,42,.12);
+    display: none;
+  }
+  .suggestions.show { display: block; }
+  .suggestion-item {
+    padding: 12px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.35;
+    color: var(--text);
+  }
+  .suggestion-item:last-child { border-bottom: none; }
+  .suggestion-item:hover,
+  .suggestion-item.active { background: #f1f5f9; }
+
+  .summary {
+    background: #f1f5f9;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-size: 15px;
+  }
+  .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+  }
+  .summary-row span:first-child { color: var(--muted); }
+  .summary-row span:last-child { font-weight: 600; }
+
+  .error {
+    color: var(--delivery);
+    font-size: 14px;
+    margin-top: 8px;
+    min-height: 20px;
+    font-weight: 500;
+  }
+
+  .btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s, transform .08s;
+  }
+  .btn:active { transform: scale(.98); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+  .btn-primary:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+  }
+  .btn-secondary {
+    background: #f1f5f9;
+    color: var(--text);
+  }
+  .btn-secondary:hover { background: #e2e8f0; }
+
+  .demo-link {
+    display: inline-block;
+    color: var(--accent);
+    font-size: 13px;
+    margin-top: 8px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .demo-link:hover { color: var(--accent-hover); }
+
+  .tracking-panel { display: none; }
+  .tracking-panel.active { display: block; }
+  .order-panel.hidden { display: none; }
+
+  .tracking-header {
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .tracking-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .status-pill {
+    background: #dbeafe;
+    color: #1e40af;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+  .status-pill.arrived {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .tracking-map-wrap {
+    height: 400px;
+  }
+
+  .tracking-info {
+    padding: 20px 24px 24px;
+  }
+
+  .eta-block {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .eta-label {
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .eta-time {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-bar {
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, var(--accent), #0ea5e9);
+    border-radius: 999px;
+    transition: width .3s linear;
+  }
+
+  .demo-note {
+    font-size: 12px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 12px;
+    font-style: italic;
+  }
+
+  .toast-container {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+  }
+  .toast {
+    background: #0f172a;
+    color: #fff;
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 8px 24px rgba(15,23,42,.2);
+    opacity: 0;
+    transform: translateX(20px);
+    transition: opacity .3s, transform .3s;
+    max-width: 340px;
+    pointer-events: auto;
+  }
+  .toast.show { opacity: 1; transform: translateX(0); }
+  .toast.success { background: #059669; }
+  .toast.info { background: var(--accent); }
+  .toast.warn { background: #d97706; }
+
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,.55);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: #fff;
+    border-radius: 20px;
+    max-width: 440px;
+    width: 100%;
+    padding: 32px 28px 28px;
+    box-shadow: 0 24px 64px rgba(15,23,42,.25);
+    text-align: center;
+    animation: modalIn .2s ease-out;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  .modal-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #fef2f2;
+    color: var(--delivery);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+  }
+  .modal h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .modal p {
+    color: var(--muted);
+    font-size: 15px;
+    margin-bottom: 24px;
+    line-height: 1.55;
+  }
+  .modal .btn { margin-top: 0; }
+
+  .leaflet-control-attribution { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge">Радиус 10 км · до 2,5 кг</div>
+</header>
+
+<main>
+  <!-- ============= ORDER PANEL ============= -->
+  <section class="order-panel" id="orderPanel">
+    <div class="hero">
+      <h1>Доставка дроном за минуты</h1>
+      <p>Автопилотируемые БПЛА · точка в точку · прозрачное отслеживание</p>
+    </div>
+
+    <div class="layout">
+      <div class="card">
+        <div class="map-wrap">
+          <div id="map"></div>
+          <div class="map-hint" id="mapHint">Введите адрес или кликните на карту</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="form-section">
+          <div class="section-title">Маршрут</div>
+
+          <div class="point-input">
+            <label><span class="dot pickup"></span> Откуда забрать</label>
+            <div class="input-row">
+              <input id="pickupInput" type="text" placeholder="Введите адрес или нажмите на карту" autocomplete="off" spellcheck="false">
+              <button type="button" class="map-pick-btn" id="pickupMapBtn" title="Указать на карте">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Карта
+              </button>
+            </div>
+            <div class="suggestions" id="pickupSuggestions"></div>
+          </div>
+
+          <div class="point-input">
+            <label><span class="dot delivery"></span> Куда доставить</label>
+            <div class="input-row">
+              <input id="deliveryInput" type="text" placeholder="Введите адрес или нажмите на карту" autocomplete="off" spellcheck="false">
+              <button type="button" class="map-pick-btn" id="deliveryMapBtn" title="Указать на карте">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                Карта
+              </button>
+            </div>
+            <div class="suggestions" id="deliverySuggestions"></div>
+          </div>
+
+          <div class="weight-input">
+            <label>Вес груза (до 2,5 кг)</label>
+            <input id="weightInput" type="number" min="0.1" max="2.5" step="0.1" value="1">
+          </div>
+
+          <div class="summary" id="summary" style="display:none;">
+            <div class="summary-row"><span>Расстояние</span><span id="distanceVal">—</span></div>
+            <div class="summary-row"><span>Время в пути</span><span id="etaVal">—</span></div>
+            <div class="summary-row"><span>Стоимость</span><span id="priceVal">—</span></div>
+          </div>
+
+          <button class="btn btn-primary" id="confirmBtn" disabled>Подтвердить заказ</button>
+          <div class="error" id="errorMsg"></div>
+
+          <div style="text-align:center;">
+            <span class="demo-link" id="demoBtn">Заполнить демо-данными</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============= TRACKING PANEL ============= -->
+  <section class="tracking-panel" id="trackingPanel">
+    <div class="hero">
+      <h1>Дрон в пути</h1>
+      <p>Следите за полётом в реальном времени</p>
+    </div>
+
+    <div class="card">
+      <div class="tracking-header">
+        <h2>Заказ №<span id="orderNumber">—</span></h2>
+        <div class="status-pill" id="statusPill">Взлёт...</div>
+      </div>
+
+      <div class="tracking-map-wrap">
+        <div id="trackingMap"></div>
+      </div>
+
+      <div class="tracking-info">
+        <div class="eta-block">
+          <div class="eta-label">Прибытие через</div>
+          <div class="eta-time" id="etaCountdown">--:--</div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <button class="btn btn-secondary" id="newOrderBtn">Новый заказ</button>
+        <div class="demo-note">Демо-симуляция: полёт ускорен для наглядности</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="modal-overlay" id="distanceModal">
+  <div class="modal">
+    <div class="modal-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <line x1="12" y1="8" x2="12" y2="12"></line>
+        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+      </svg>
+    </div>
+    <h3>Маршрут слишком длинный</h3>
+    <p>Расстояние между точками превышает <strong>10 км</strong>. Пожалуйста, измените адрес доставки — он должен находиться ближе к точке забора.</p>
+    <button class="btn btn-primary" id="modalCloseBtn">Понятно</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   КОНСТАНТЫ
+   ============================================================ */
+const MAX_DISTANCE_KM = 10;
+const MAX_WEIGHT_KG = 2.5;
+const PRICE_PER_MIN = 24;
+const DRONE_SPEED_KMH = 50;
+const DEMO_MS_PER_KM = 3000;
+
+/* ============================================================
+   СОСТОЯНИЕ
+   ============================================================ */
+let pickupCoords = null;
+let deliveryCoords = null;
+let pickupPlacemark = null;
+let deliveryPlacemark = null;
+let clickMode = null;              // 'pickup' | 'delivery' | null
+
+let orderMap = null;
+let trackingMap = null;
+let dronePlacemark = null;
+let routeLine = null;
+let ymapsReady = false;
+
+/* ============================================================
+   УТИЛИТЫ
+   ============================================================ */
+function haversineKm(a, b) {
+  const R = 6371;
+  const dLat = (b[0] - a[0]) * Math.PI / 180;
+  const dLng = (b[1] - a[1]) * Math.PI / 180;
+  const lat1 = a[0] * Math.PI / 180;
+  const lat2 = b[0] * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+function formatTime(sec) {
+  sec = Math.max(0, Math.ceil(sec));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function showToast(message, type = 'info', duration = 4500) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('show'));
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 350);
+  }, duration);
+}
+
+function beep(times = 2) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    let t = ctx.currentTime;
+    for (let i = 0; i < times; i++) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t); osc.stop(t + 0.3);
+      t += 0.4;
+    }
+  } catch (e) {}
+}
+
+/* ============================================================
+   МОДАЛЬНОЕ ОКНО
+   ============================================================ */
+function openDistanceModal() {
+  document.getElementById('distanceModal').classList.add('show');
+}
+function closeDistanceModal() {
+  document.getElementById('distanceModal').classList.remove('show');
+}
+document.getElementById('modalCloseBtn').addEventListener('click', closeDistanceModal);
+document.getElementById('distanceModal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('distanceModal')) closeDistanceModal();
+});
+
+/* ============================================================
+   ГЕОКОДИРОВАНИЕ
+   ============================================================ */
+function reverseGeocode(coords) {
+  return new Promise((resolve) => {
+    ymaps.geocode(coords, { results: 1 }).then((res) => {
+      const first = res.geoObjects.get(0);
+      resolve(first ? first.getAddressLine() : `${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`);
+    }).catch(() => {
+      resolve(`${coords[0].toFixed(5)}, ${coords[1].toFixed(5)}`);
+    });
+  });
+}
+
+function forwardGeocode(address) {
+  return new Promise((resolve) => {
+    if (!address || address.trim().length < 3) return resolve(null);
+    ymaps.geocode(address, { results: 1 }).then((res) => {
+      const first = res.geoObjects.get(0);
+      resolve(first ? first.geometry.getCoordinates() : null);
+    }).catch(() => resolve(null));
+  });
+}
+
+/* ============================================================
+   УСТАНОВКА ТОЧКИ (общая для карты и ручного ввода)
+   ============================================================ */
+async function setPoint(type, coords, address) {
+  if (!coords) return;
+
+  if (type === 'pickup') {
+    pickupCoords = coords;
+    if (pickupPlacemark) orderMap.geoObjects.remove(pickupPlacemark);
+    pickupPlacemark = new ymaps.Placemark(coords, {}, {
+      preset: 'islands#greenDotIcon',
+      draggable: true
+    });
+    pickupPlacemark.events.add('dragend', async () => {
+      const c = pickupPlacemark.geometry.getCoordinates();
+      pickupCoords = c;
+      document.getElementById('pickupInput').value = await reverseGeocode(c);
+      updateSummary();
+    });
+    orderMap.geoObjects.add(pickupPlacemark);
+    document.getElementById('pickupInput').value = address || await reverseGeocode(coords);
+  } else {
+    deliveryCoords = coords;
+    if (deliveryPlacemark) orderMap.geoObjects.remove(deliveryPlacemark);
+    deliveryPlacemark = new ymaps.Placemark(coords, {}, {
+      preset: 'islands#redDotIcon',
+      draggable: true
+    });
+    deliveryPlacemark.events.add('dragend', async () => {
+      const c = deliveryPlacemark.geometry.getCoordinates();
+      deliveryCoords = c;
+      document.getElementById('deliveryInput').value = await reverseGeocode(c);
+      updateSummary();
+    });
+    orderMap.geoObjects.add(deliveryPlacemark);
+    document.getElementById('deliveryInput').value = address || await reverseGeocode(coords);
+  }
+
+  orderMap.setCenter(coords, 14);
+  updateSummary();
+}
+
+/* ============================================================
+   ЯНДЕКС.КАРТЫ — ИНИЦИАЛИЗАЦИЯ
+   ============================================================ */
+ymaps.ready(() => {
+  ymapsReady = true;
+
+  orderMap = new ymaps.Map('map', {
+    center: [55.751244, 37.618423],
+    zoom: 13,
+    controls: ['zoomControl', 'geolocationControl']
+  }, {
+    searchControlProvider: 'yandex#search'
+  });
+
+  // Клик по карте — ставит точку, если выбрано, куда именно
+  orderMap.events.add('click', async (e) => {
+    if (!clickMode) {
+      // Умное определение: если pickup не задан — ставим его, иначе delivery
+      if (!pickupCoords) clickMode = 'pickup';
+      else if (!deliveryCoords) clickMode = 'delivery';
+      else clickMode = 'delivery'; // по умолчанию меняем точку доставки
+    }
+    const coords = e.get('coords');
+    const type = clickMode;
+    clickMode = null;
+    updateHint();
+    await setPoint(type, coords);
+  });
+
+  updateHint();
+
+  // Настраиваем поля ввода
+  setupAddressInput('pickupInput', 'pickupSuggestions', 'pickup');
+  setupAddressInput('deliveryInput', 'deliverySuggestions', 'delivery');
+
+  // Кнопки «Карта» — включают режим клика по карте
+  document.getElementById('pickupMapBtn').addEventListener('click', () => {
+    clickMode = 'pickup';
+    updateMapBtnStates();
+    updateHint();
+    showToast('Кликните на карту, чтобы поставить точку забора', 'info', 2500);
+  });
+  document.getElementById('deliveryMapBtn').addEventListener('click', () => {
+    clickMode = 'delivery';
+    updateMapBtnStates();
+    updateHint();
+    showToast('Кликните на карту, чтобы поставить точку доставки', 'info', 2500);
+  });
+});
+
+/* ============================================================
+   АВТОДОПОЛНЕНИЕ + РУЧНОЙ ВВОД
+   ============================================================ */
+function setupAddressInput(inputId, suggestionsId, type) {
+  const input = document.getElementById(inputId);
+  const box = document.getElementById(suggestionsId);
+  let debounceTimer = null;
+  let activeIndex = -1;
+  let currentSuggestions = [];
+
+  function closeBox() {
+    box.classList.remove('show');
+    box.innerHTML = '';
+    activeIndex = -1;
+    currentSuggestions = [];
+  }
+
+  function renderSuggestions(items) {
+    box.innerHTML = '';
+    if (!items.length) { box.classList.remove('show'); return; }
+    items.slice(0, 8).forEach((s, idx) => {
+      const item = document.createElement('div');
+      item.className = 'suggestion-item';
+      item.textContent = s.displayName;
+      item.addEventListener('mousedown', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const coords = await forwardGeocode(s.value);
+        if (coords) {
+          await setPoint(type, coords, s.displayName);
+        } else {
+          showToast('Не удалось определить координаты адреса', 'warn');
+        }
+        closeBox();
+      });
+      box.appendChild(item);
+    });
+    box.classList.add('show');
+  }
+
+  async function submitManual() {
+    const q = input.value.trim();
+    if (q.length < 3) return;
+    const coords = await forwardGeocode(q);
+    if (coords) {
+      const addr = await reverseGeocode(coords);
+      input.value = addr;
+      await setPoint(type, coords, addr);
+    } else {
+      showToast('Адрес не найден. Уточните формулировку или поставьте точку на карте', 'warn', 5000);
+    }
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const q = input.value.trim();
+    if (q.length < 3) { closeBox(); return; }
+
+    debounceTimer = setTimeout(async () => {
+      try {
+        const suggestions = await ymaps.suggest(q);
+        currentSuggestions = suggestions || [];
+        activeIndex = -1;
+        renderSuggestions(currentSuggestions);
+      } catch (e) {
+        closeBox();
+      }
+    }, 250);
+  });
+
+  input.addEventListener('keydown', async (e) => {
+    const isOpen = box.classList.contains('show');
+
+    if (e.key === 'ArrowDown' && isOpen) {
+      e.preventDefault();
+      const items = box.querySelectorAll('.suggestion-item');
+      activeIndex = Math.min(activeIndex + 1, items.length - 1);
+      items.forEach((it, i) => it.classList.toggle('active', i === activeIndex));
+      const activeEl = items[activeIndex];
+      if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'ArrowUp' && isOpen) {
+      e.preventDefault();
+      const items = box.querySelectorAll('.suggestion-item');
+      activeIndex = Math.max(activeIndex - 1, 0);
+      items.forEach((it, i) => it.classList.toggle('active', i === activeIndex));
+      const activeEl = items[activeIndex];
+      if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (isOpen && activeIndex >= 0 && currentSuggestions[activeIndex]) {
+        const s = currentSuggestions[activeIndex];
+        const coords = await forwardGeocode(s.value);
+        if (coords) await setPoint(type, coords, s.displayName);
+        closeBox();
+      } else if (isOpen && currentSuggestions[0]) {
+        const s = currentSuggestions[0];
+        const coords = await forwardGeocode(s.value);
+        if (coords) await setPoint(type, coords, s.displayName);
+        closeBox();
+      } else {
+        await submitManual();
+        closeBox();
+      }
+      return;
+    }
+    if (e.key === 'Escape') {
+      closeBox();
+    }
+  });
+
+  input.addEventListener('blur', () => {
+    // Небольшая задержка, чтобы успеть среагировать на клик по подсказке
+    setTimeout(() => {
+      if (!box.matches(':hover')) closeBox();
+    }, 180);
+  });
+
+  input.addEventListener('focus', () => {
+    // Не переключаем clickMode автоматически, чтобы не сбивать пользователя
+    // Если есть что показать — показываем подсказки
+    if (currentSuggestions.length) box.classList.add('show');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!input.parentElement.contains(e.target) && !box.contains(e.target)) {
+      closeBox();
+    }
+  });
+}
+
+/* ============================================================
+   ПОДСКАЗКА НА КАРТЕ + СОСТОЯНИЕ КНОПОК
+   ============================================================ */
+function updateHint() {
+  const hint = document.getElementById('mapHint');
+  if (clickMode === 'pickup') hint.textContent = 'Кликните на карту — точка «Откуда»';
+  else if (clickMode === 'delivery') hint.textContent = 'Кликните на карту — точка «Куда»';
+  else if (pickupCoords && deliveryCoords) hint.textContent = 'Маршрут готов. Проверьте данные и подтвердите заказ';
+  else if (pickupCoords) hint.textContent = 'Укажите точку «Куда» — введите адрес или кликните на карту';
+  else hint.textContent = 'Введите адрес или кликните на карту';
+  updateMapBtnStates();
+}
+
+function updateMapBtnStates() {
+  document.getElementById('pickupMapBtn').classList.toggle('active', clickMode === 'pickup');
+  document.getElementById('deliveryMapBtn').classList.toggle('active', clickMode === 'delivery');
+}
+
+/* ============================================================
+   ВАЛИДАЦИЯ И СВОДКА
+   ============================================================ */
+function updateSummary() {
+  const summary = document.getElementById('summary');
+  const errorMsg = document.getElementById('errorMsg');
+  const confirmBtn = document.getElementById('confirmBtn');
+  errorMsg.textContent = '';
+
+  if (!pickupCoords || !deliveryCoords) {
+    summary.style.display = 'none';
+    confirmBtn.disabled = true;
+    return;
+  }
+
+  const distance = haversineKm(pickupCoords, deliveryCoords);
+  const weight = parseFloat(document.getElementById('weightInput').value) || 0;
+  const etaMin = Math.max(1, Math.round(distance / DRONE_SPEED_KMH * 60));
+  const price = Math.round(etaMin * PRICE_PER_MIN);
+
+  document.getElementById('distanceVal').textContent = `${distance.toFixed(2)} км`;
+  document.getElementById('etaVal').textContent = `~${etaMin} мин`;
+  document.getElementById('priceVal').textContent = `${price} ₽`;
+  summary.style.display = 'block';
+
+  if (distance > MAX_DISTANCE_KM) {
+    errorMsg.textContent = `Маршрут ${distance.toFixed(2)} км превышает радиус 10 км`;
+    confirmBtn.disabled = true;
+    openDistanceModal();
+    return;
+  }
+
+  if (weight <= 0 || weight > MAX_WEIGHT_KG) {
+    errorMsg.textContent = `Вес должен быть от 0,1 до ${MAX_WEIGHT_KG} кг`;
+    confirmBtn.disabled = true;
+    return;
+  }
+
+  confirmBtn.disabled = false;
+}
+
+document.getElementById('weightInput').addEventListener('input', updateSummary);
+
+/* ============================================================
+   ДЕМО-ДАННЫЕ
+   ============================================================ */
+document.getElementById('demoBtn').addEventListener('click', async () => {
+  if (!ymapsReady) return;
+
+  const a = [55.752221, 37.617843];
+  const b = [55.760149, 37.588047];
+
+  await setPoint('pickup', a);
+  await setPoint('delivery', b);
+
+  orderMap.setBounds([a, b], { checkZoomRange: true, zoomMargin: 60 });
+  clickMode = null;
+  updateHint();
+  showToast('Демо-маршрут загружен', 'info', 2500);
+});
+
+/* ============================================================
+   ПОДТВЕРЖДЕНИЕ ЗАКАЗА
+   ============================================================ */
+document.getElementById('confirmBtn').addEventListener('click', async () => {
+  if (!pickupCoords || !deliveryCoords) return;
+
+  if ('Notification' in window && Notification.permission === 'default') {
+    try { await Notification.requestPermission(); } catch (e) {}
+  }
+
+  startTracking();
+});
+
+/* ============================================================
+   ТРЕКИНГ
+   ============================================================ */
+function startTracking() {
+  document.getElementById('orderPanel').classList.add('hidden');
+  document.getElementById('trackingPanel').classList.add('active');
+
+  document.getElementById('orderNumber').textContent =
+    Math.floor(100000 + Math.random() * 900000);
+
+  const distance = haversineKm(pickupCoords, deliveryCoords);
+
+  if (trackingMap) {
+    trackingMap.destroy();
+    trackingMap = null;
+  }
+  trackingMap = new ymaps.Map('trackingMap', {
+    center: [(pickupCoords[0] + deliveryCoords[0]) / 2, (pickupCoords[1] + deliveryCoords[1]) / 2],
+    zoom: 14,
+    controls: ['zoomControl']
+  });
+
+  const startMark = new ymaps.Placemark(pickupCoords, {}, { preset: 'islands#greenDotIcon' });
+  const endMark = new ymaps.Placemark(deliveryCoords, {}, { preset: 'islands#redDotIcon' });
+  trackingMap.geoObjects.add(startMark);
+  trackingMap.geoObjects.add(endMark);
+
+  routeLine = new ymaps.Polyline(
+    [pickupCoords, deliveryCoords],
+    {},
+    { strokeColor: '#2563eb', strokeWidth: 3, strokeStyle: 'dash', strokeOpacity: 0.8 }
+  );
+  trackingMap.geoObjects.add(routeLine);
+
+  trackingMap.setBounds([pickupCoords, deliveryCoords], { checkZoomRange: true, zoomMargin: 60 });
+
+  dronePlacemark = new ymaps.Placemark(pickupCoords, {}, {
+    iconLayout: 'default#imageWithContent',
+    iconImageHref: 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+      <svg width="36" height="36" viewBox="0 0 24 24" fill="#2563eb" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="2.6"/>
+        <circle cx="4" cy="4" r="2.2" opacity="0.55"/>
+        <circle cx="20" cy="4" r="2.2" opacity="0.55"/>
+        <circle cx="4" cy="20" r="2.2" opacity="0.55"/>
+        <circle cx="20" cy="20" r="2.2" opacity="0.55"/>
+        <line x1="5.5" y1="5.5" x2="10" y2="10" stroke="#2563eb" stroke-width="1.6"/>
+        <line x1="18.5" y1="5.5" x2="14" y2="10" stroke="#2563eb" stroke-width="1.6"/>
+        <line x1="5.5" y1="18.5" x2="10" y2="14" stroke="#2563eb" stroke-width="1.6"/>
+        <line x1="18.5" y1="18.5" x2="14" y2="14" stroke="#2563eb" stroke-width="1.6"/>
+      </svg>
+    `),
+    iconImageSize: [36, 36],
+    iconImageOffset: [-18, -18]
+  });
+  trackingMap.geoObjects.add(dronePlacemark);
+
+  const flightMs = Math.max(4000, distance * DEMO_MS_PER_KM);
+  const startTime = performance.now();
+  const progressFill = document.getElementById('progressFill');
+  const etaCountdown = document.getElementById('etaCountdown');
+  const statusPill = document.getElementById('statusPill');
+
+  let approachNotified = false;
+
+  setTimeout(() => { statusPill.textContent = 'В полёте'; }, 600);
+
+  function tick(now) {
+    const t = Math.min((now - startTime) / flightMs, 1);
+
+    const curLat = pickupCoords[0] + (deliveryCoords[0] - pickupCoords[0]) * t;
+    const curLng = pickupCoords[1] + (deliveryCoords[1] - pickupCoords[1]) * t;
+    dronePlacemark.geometry.setCoordinates([curLat, curLng]);
+
+    progressFill.style.width = (t * 100).toFixed(1) + '%';
+    const remainingSec = (flightMs * (1 - t)) / 1000;
+    etaCountdown.textContent = formatTime(remainingSec);
+
+    if (!approachNotified && t >= 0.72) {
+      approachNotified = true;
+      statusPill.textContent = 'Прибывает';
+      showToast('Дрон прибывает через несколько секунд', 'warn', 5000);
+      beep(1);
+      if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      statusPill.textContent = 'Доставлено';
+      statusPill.classList.add('arrived');
+      etaCountdown.textContent = '0:00';
+      progressFill.style.width = '100%';
+      showToast('Дрон прибыл. Груз доставлен', 'success', 6000);
+      beep(3);
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('Доставка завершена', {
+            body: 'Дрон прибыл в точку назначения. Груз доставлен.'
+          });
+        } catch (e) {}
+      }
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+/* ============================================================
+   НОВЫЙ ЗАКАЗ
+   ============================================================ */
+document.getElementById('newOrderBtn').addEventListener('click', () => {
+  document.getElementById('trackingPanel').classList.remove('active');
+  document.getElementById('orderPanel').classList.remove('hidden');
+
+  pickupCoords = null;
+  deliveryCoords = null;
+  if (pickupPlacemark && orderMap) { orderMap.geoObjects.remove(pickupPlacemark); pickupPlacemark = null; }
+  if (deliveryPlacemark && orderMap) { orderMap.geoObjects.remove(deliveryPlacemark); deliveryPlacemark = null; }
+
+  document.getElementById('pickupInput').value = '';
+  document.getElementById('deliveryInput').value = '';
+  document.getElementById('weightInput').value = 1;
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('errorMsg').textContent = '';
+  document.getElementById('confirmBtn').disabled = true;
+  document.getElementById('statusPill').textContent = 'Взлёт...';
+  document.getElementById('statusPill').classList.remove('arrived');
+  document.getElementById('progressFill').style.width = '0%';
+  clickMode = null;
+  updateHint();
+
+  if (trackingMap) { trackingMap.destroy(); trackingMap = null; }
+
+  orderMap.container.fitToViewport();
+});
+
+updateHint();
+</script>
+</body>
+</html>
